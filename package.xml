@@ -1,0 +1,31 @@
+<package>
+ <name> dumbo_contact_point_estimation </name>
+  <version>0.1.0</version>
+  <description>
+    Implements and launches Dumbo specific components for contact point estimation.
+  </description>
+  <license>BSD</license>
+
+  <url type="website">http://wiki.ros.org/dumbo_contact_point_estimation</url>
+
+  <author email="fevb@kth.se">Francisco Vina</author>
+  <maintainer email="fevb@kth.se">Francisco Vina</maintainer>
+
+  <buildtool_depend>catkin</buildtool_depend>
+
+  <build_depend>roscpp</build_depend>
+  <build_depend>contact_point_estimation</build_depend>
+  <build_depend>cart_traj_generators</build_depend>
+  <build_depend>geometry_msgs</build_depend>
+  <build_depend>dumbo_cart_vel_controller</build_depend>
+  <build_depend>std_srvs</build_depend>
+
+  <run_depend>roscpp</run_depend>
+  <run_depend>contact_point_estimation</run_depend>
+  <run_depend>cart_traj_generators</run_depend>
+  <run_depend>geometry_msgs</run_depend>
+  <run_depend>dumbo_cart_vel_controller</run_depend>
+  <run_depend>std_srvs</run_depend>
+
+</package>
+
