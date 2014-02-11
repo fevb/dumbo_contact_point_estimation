@@ -1,7 +1,7 @@
 dumbo_contact_point_estimation
 ==============================
 
-Implements and launches Dumbo specific components for contact point estimation.
+Implements and launches Dumbo specific components for force-torque sensing based contact point estimation.
 Requires the following packages (can be found in https://github.com/kth-ros-pkg):
 
 * [contact_point_estimation][1]
