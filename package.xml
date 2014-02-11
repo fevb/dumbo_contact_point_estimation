@@ -2,7 +2,7 @@
  <name> dumbo_contact_point_estimation </name>
   <version>0.1.0</version>
   <description>
-    Implements and launches Dumbo specific components for contact point estimation.
+    Implements and launches Dumbo specific components for force-torque sensing based contact point estimation.
   </description>
   <license>BSD</license>
 
