@@ -33,9 +33,12 @@
    SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#include <ros/ros.h>
 #include <contact_point_estimation/SurfaceTracingController.h>
 #include <dumbo_cart_vel_controller/DumboCartVelController.h>
 #include <cart_traj_generators/CircleTrajGenerator.h>
+#include <eigen_conversions/eigen_msg.h>
+#include <kdl_conversions/kdl_msg.h>
 #include <geometry_msgs/TwistStamped.h>
 #include <geometry_msgs/Vector3Stamped.h>
 #include <geometry_msgs/WrenchStamped.h>
@@ -49,6 +52,7 @@ public:
 
 	ros::Publisher topicPub_twist_ft_sensor_;
 	ros::Subscriber topicSub_ft_compensated_;
+	ros::Subscriber topicSub_surface_normal_;
 
 	/// declaration of service servers
 	ros::ServiceServer srvServer_Start_;
@@ -63,6 +67,9 @@ public:
 		topicPub_twist_ft_sensor_ = n_.advertise<geometry_msgs::TwistStamped>("twist_ft_sensor", 1);
 		topicSub_ft_compensated_ = n_.subscribe("ft_compensated", 1,
 				&DumboSurfaceTracingControllerNode::topicCallback_ft_compensated, this);
+		topicSub_surface_normal_ = n_.subscribe("surface_normal", 1,
+						&DumboSurfaceTracingControllerNode::topicCallback_surface_normal, this);
+
 
 		srvServer_Start_ = n_.advertiseService("start", &DumboSurfaceTracingControllerNode::srvCallback_Start, this);
 		srvServer_Stop_ = n_.advertiseService("stop", &DumboSurfaceTracingControllerNode::srvCallback_Stop, this);
@@ -77,6 +84,9 @@ public:
 		// gets ROS parameters for the trajectory generator
 		// and sets the parameters in the controller object
 		configureTrajectoryGenerator();
+
+		m_dumbo_ft_kdl_wrapper.init("arm_base_link", m_ft_compensated.header.frame_id);
+		m_dumbo_ft_kdl_wrapper.ik_solver_vel->setLambda(0.3);
 
 	}
 
@@ -255,15 +265,140 @@ public:
 		m_ft_compensated = *msg;
 	}
 
+	void topicCallback_surface_normal(const geometry_msgs::Vector3StampedPtr &msg)
+	{
+		m_surface_normal = *msg;
+	}
+
 	void topicCallback_joint_states(const control_msgs::JointTrajectoryControllerStatePtr &msg)
 	{
+		DumboCartVelController::topicCallback_joint_states(msg);
 
+		if(m_run_controller)
+		{
+			KDL::JntArray q_dot;
+			if(calculateJointVelCommand(q_dot))
+			{
+
+				// publish joint velocity command to the manipulator
+				publishJointVelCommand(q_dot);
+				// publish twist of the FT sensor frame
+				publishFTSensorTwist();
+			}
+		}
+
+	}
+
+	bool calculateJointVelCommand(KDL::JntArray &q_dot)
+	{
+		if(!m_dumbo_ft_kdl_wrapper.isInitialized())
+		{
+			static ros::Time t = ros::Time::now();
+			if((ros::Time::now()-t).toSec()>2.0)
+			{
+				ROS_ERROR("Dumbo KDL wrapper (arm_base_link to ft_sensor) not initialized");
+				t = ros::Time::now();
+			}
+			return false;
+		}
+
+		if(!m_dumbo_kdl_wrapper.isInitialized())
+		{
+			static ros::Time t = ros::Time::now();
+			if((ros::Time::now()-t).toSec()>2.0)
+			{
+				ROS_ERROR("Dumbo KDL wrapper not initialized");
+				t = ros::Time::now();
+			}
+			return false;
+		}
+
+		KDL::JntArrayVel q_in(m_DOF);
+		for(unsigned int i=0; i<m_DOF; i++)
+		{
+			q_in.q(i) = m_joint_state_msg.actual.positions[i];
+			q_in.qdot(i) = m_joint_state_msg.actual.velocities[i];
+		}
+
+		// calculate pose and twist of FT sensor
+
+		KDL::FrameVel Fvel_ft;
+		m_dumbo_ft_kdl_wrapper.fk_solver_vel->JntToCart(q_in, Fvel_ft);
+
+		Eigen::Vector3d p(Fvel_ft.p.p(0), Fvel_ft.p.p(1), Fvel_ft.p.p(2));
+		m_twist_ft_sensor.vel = Fvel_ft.p.v;
+		m_twist_ft_sensor.rot = Fvel_ft.M.w;
+
+		// get p_d, p_dot_d set points from the trajectory generator
+		double time = (ros::Time::now()-m_t_start).toSec();
+		KDL::Frame F;
+		KDL::Twist v;
+		m_cart_traj_generator->getSetPoint(time, F, v);
+
+		Eigen::Vector3d p_d;
+		Eigen::Vector3d p_dot_d;
+
+		for(unsigned int i=0; i<3; i++) p_d(i) = F.p(i);
+		for(unsigned int i=0; i<3; i++) p_dot_d(i) = v.vel(i);
+
+		// calculate control signal (twist of FT sensor with respect to arm_base_frame)
+		Eigen::Matrix<double, 6, 1> ft_compensated;
+		tf::wrenchMsgToEigen(m_ft_compensated.wrench, ft_compensated);
+
+		Eigen::Vector3d surface_normal;
+		tf::vectorMsgToEigen(m_surface_normal.vector, surface_normal);
+
+		Eigen::Vector3d u;
+		u = m_surface_tracing_controller->controlSignal(surface_normal,
+				ft_compensated, p, p_d, p_dot_d);
+
+		// calculate inverse kinematics
+		// set rotational vel to zero
+		KDL::Twist u_ = KDL::Twist::Zero();
+		for(unsigned int i=0; i<3; i++) u_(i) = u(i);
+
+		m_dumbo_ft_kdl_wrapper.ik_solver_vel->CartToJnt(q_in.q, u_, q_dot);
+
+		return true;
+	}
+
+	void publishFTSensorTwist()
+	{
+		geometry_msgs::TwistStamped twist_ft_sensor;
+		twist_ft_sensor.header.frame_id = "arm_base_link";
+		twist_ft_sensor.header.stamp = ros::Time::now();
+		tf::twistKDLToMsg(m_twist_ft_sensor, twist_ft_sensor.twist);
+
+		topicPub_twist_ft_sensor_.publish(twist_ft_sensor);
 	}
 
 	bool srvCallback_Start(std_srvs::Empty::Request &req, std_srvs::Empty::Response &res)
 	{
-		m_run_controller = true;
-		m_t_start = ros::Time::now();
+		if(m_received_js)
+		{
+			m_run_controller = true;
+			m_t_start = ros::Time::now();
+			m_surface_tracing_controller->reset();
+			// set initial pose of FT sensor for trajectory generator
+			KDL::JntArray q_in;
+			for(unsigned int i=0; i<m_DOF; i++) q_in(i) = m_joint_state_msg.actual.positions[i];
+			KDL::Frame F_ft_sensor;
+			m_dumbo_ft_kdl_wrapper.fk_solver_pos->JntToCart(q_in, F_ft_sensor);
+
+			m_cart_traj_generator->setInitPose(F_ft_sensor);
+
+		}
+
+		else
+		{
+			static ros::Time t = ros::Time::now();
+			if((ros::Time::now()-t).toSec()>2.0)
+			{
+				ROS_ERROR("Haven't received joint states, can't start controller...");
+				t = ros::Time::now();
+			}
+			return false;
+		}
 
 		return true;
 	}
@@ -279,14 +414,20 @@ private:
 	CartTrajGenerator *m_cart_traj_generator;
 	SurfaceTracingController *m_surface_tracing_controller;
 
+	// for calculating kinematics from base frame to the FT sensor frame
+	KDLWrapper m_dumbo_ft_kdl_wrapper;
+
 	geometry_msgs::WrenchStamped m_ft_compensated;
+	geometry_msgs::Vector3Stamped m_surface_normal;
+
+	// twist of the FT sensor expressed in the base frame
+	KDL::Twist m_twist_ft_sensor;
 
 
 	// starting time for the trajectory generator
 	ros::Time m_t_start;
 
 	bool m_run_controller;
-
 
 
 };
@@ -296,7 +437,6 @@ int main(int argc, char **argv)
 	ros::init(argc, argv, "dumbo_contact_point_estimation");
 
 	DumboSurfaceTracingControllerNode dumbo_surface_tracing_controller_node;
-
 
 	ros::spin();
 
