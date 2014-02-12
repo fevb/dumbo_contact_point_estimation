@@ -1,0 +1,17 @@
+<?xml version="1.0"?>
+<launch>
+  
+  <!-- input argument can be 'left' or 'right' -->
+  <arg name="arm" default="left"/>
+
+  <!-- launch the surface tracing controller -->
+  <include file="$(find dumbo_contact_point_estimation)/launch/dumbo_surface_tracing_controller.launch" >
+    <arg name="arm" value="$(arg arm)" />
+  </include>
+
+  <!-- launch the contact point estimator -->
+  <include file="$(find contact_point_estimation)/launch/contact_point_estimation.launch" >
+    <arg name="ft_sensor_topic" value="/$(arg arm)_arm_ft_sensor/ft_compensated"/>
+  </include>
+
+</launch>

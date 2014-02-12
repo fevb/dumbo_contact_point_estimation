@@ -60,8 +60,8 @@ public:
 	ros::ServiceServer srvServer_Start_;
 	ros::ServiceServer srvServer_Stop_;
 
-	// dynamic reconfigure server
-	dynamic_reconfigure::Server<dumbo_contact_point_estimation::SurfaceTracingControllerConfig> server_;
+	//	 dynamic reconfigure server
+	dynamic_reconfigure::Server<dumbo_contact_point_estimation::SurfaceTracingControllerConfig> *dyn_reconfig_server_;
 	dynamic_reconfigure::Server<dumbo_contact_point_estimation::SurfaceTracingControllerConfig>::CallbackType f_;
 
 	DumboSurfaceTracingControllerNode() : DumboCartVelController()
@@ -81,8 +81,10 @@ public:
 		srvServer_Stop_ = n_.advertiseService("stop", &DumboSurfaceTracingControllerNode::srvCallback_Stop, this);
 
 		// set up the dyn reconfig callback
+		dyn_reconfig_server_ = new dynamic_reconfigure::Server<dumbo_contact_point_estimation::SurfaceTracingControllerConfig>();
+
 		f_ = boost::bind(&DumboSurfaceTracingControllerNode::reconfigCallback, this, _1, _2);
-		server_.setCallback(f_);
+		dyn_reconfig_server_->setCallback(f_);
 
 
 		m_surface_tracing_controller = new SurfaceTracingController();
@@ -90,14 +92,13 @@ public:
 
 		// gets ROS parameters for the surface tracing controller
 		// and sets the parameters in the controller object
-		configureController();
+		configureSurfaceTracingController();
 
 		// gets ROS parameters for the trajectory generator
 		// and sets the parameters in the controller object
 		configureTrajectoryGenerator();
 
-		m_dumbo_ft_kdl_wrapper.init("arm_base_link", m_ft_compensated.header.frame_id);
-		m_dumbo_ft_kdl_wrapper.ik_solver_vel->setLambda(0.3);
+
 
 	}
 
@@ -105,9 +106,10 @@ public:
 	{
 		delete m_surface_tracing_controller;
 		delete m_cart_traj_generator;
+		delete dyn_reconfig_server_;
 	}
 
-	void configureController()
+	void configureSurfaceTracingController()
 	{
 
 		// get the normal force compensation gains
@@ -273,6 +275,12 @@ public:
 	void topicCallback_ft_compensated(const geometry_msgs::WrenchStampedPtr &msg)
 	{
 		m_ft_compensated = *msg;
+
+		if(!m_dumbo_ft_kdl_wrapper.isInitialized())
+		{
+			m_dumbo_ft_kdl_wrapper.init("arm_base_link", m_ft_compensated.header.frame_id);
+			m_dumbo_ft_kdl_wrapper.ik_solver_vel->setLambda(0.3);
+		}
 	}
 
 	void topicCallback_surface_normal(const geometry_msgs::Vector3StampedPtr &msg)
@@ -433,7 +441,7 @@ public:
 		n_.setParam("trajectory_generator/period", config.period);
 
 
-		configureController();
+		configureSurfaceTracingController();
 		configureTrajectoryGenerator();
 
 	}

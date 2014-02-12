@@ -1,0 +1,24 @@
+# normal force regulation PI gains
+controller/alpha_p: 0.0022
+controller/alpha_i: 0.00022
+
+# trajectory position control gain
+controller/alpha: 0.3
+
+# desired normal force [N]
+controller/f_d: 10.0
+
+# control frequency [Hz]
+controller/control_freq: 140.0
+
+# trajectory type 
+trajectory_generator/trajectory_type: circle
+
+# trajectory duration [s]
+trajectory_generator/duration: 5.0
+
+# trajectory radius [m]
+trajectory_generator/radius: 0.04
+
+# trajectory period [s]
+trajectory_generator/period: 6.0

@@ -1,0 +1,16 @@
+<?xml version="1.0"?>
+<launch>
+  
+  <!-- input argument can be 'left' or 'right' -->
+  <arg name="arm" default="left"/>
+
+  <node name="$(arg arm)_arm_surface_tracing_controller" pkg="dumbo_contact_point_estimation" type="dumbo_surface_tracing_controller_node" cwd="node" respawn="false" output="screen" >
+    <rosparam command="load" file="$(find dumbo_cart_vel_controller)/config/$(arg arm)_arm_cart_vel_controller.yaml" />
+    <rosparam command="load" file="$(find dumbo_contact_point_estimation)/config/dumbo_surface_tracing_controller.yaml"/>
+    <remap from="/$(arg arm)_arm_surface_tracing_controller/command_vel" to="/$(arg arm)_arm_controller/command_vel" />
+    <remap from="/$(arg arm)_arm_surface_tracing_controller/state" to="/$(arg arm)_arm_controller/state" />
+    <remap from="/$(arg arm)_arm_surface_tracing_controller/twist_ft_sensor" to="/contact_point_estimation/twist_ft_sensor" />
+    <remap from="/$(arg arm)_arm_surface_tracing_controller/ft_compensated" to="/$(arg arm)_arm_ft_sensor/ft_compensated" />
+    <remap from="/$(arg arm)_arm_surface_tracing_controller/surface_normal" to="/contact_point_estimation/surface_normal" />    
+  </node>
+</launch>
