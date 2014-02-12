@@ -43,6 +43,8 @@
 #include <geometry_msgs/Vector3Stamped.h>
 #include <geometry_msgs/WrenchStamped.h>
 #include <std_srvs/Empty.h>
+#include <dynamic_reconfigure/server.h>
+#include <dumbo_contact_point_estimation/SurfaceTracingControllerConfig.h>
 #include <boost/bind.hpp>
 
 class DumboSurfaceTracingControllerNode : DumboCartVelController
@@ -57,6 +59,10 @@ public:
 	/// declaration of service servers
 	ros::ServiceServer srvServer_Start_;
 	ros::ServiceServer srvServer_Stop_;
+
+	// dynamic reconfigure server
+	dynamic_reconfigure::Server<dumbo_contact_point_estimation::SurfaceTracingControllerConfig> server_;
+	dynamic_reconfigure::Server<dumbo_contact_point_estimation::SurfaceTracingControllerConfig>::CallbackType f_;
 
 	DumboSurfaceTracingControllerNode() : DumboCartVelController()
 	{
@@ -73,6 +79,11 @@ public:
 
 		srvServer_Start_ = n_.advertiseService("start", &DumboSurfaceTracingControllerNode::srvCallback_Start, this);
 		srvServer_Stop_ = n_.advertiseService("stop", &DumboSurfaceTracingControllerNode::srvCallback_Stop, this);
+
+		// set up the dyn reconfig callback
+		f_ = boost::bind(&DumboSurfaceTracingControllerNode::reconfigCallback, this, _1, _2);
+		server_.setCallback(f_);
+
 
 		m_surface_tracing_controller = new SurfaceTracingController();
 		m_cart_traj_generator = NULL;
@@ -183,11 +194,11 @@ public:
 
 	void configureTrajectoryGenerator()
 	{
-		std::string trajectory_type;
+
 
 		if (n_.hasParam("trajectory_generator/trajectory_type"))
 		{
-			n_.getParam("trajectory_generator/trajectory_type", trajectory_type);
+			n_.getParam("trajectory_generator/trajectory_type", m_trajectory_type);
 		}
 
 		else
@@ -197,11 +208,25 @@ public:
 			return;
 		}
 
-		if(trajectory_type=="circle")
+		if(m_trajectory_type=="circle")
 		{
 
 			CircleTrajGenerator *circle_traj_generator = new CircleTrajGenerator();
 			m_cart_traj_generator = circle_traj_generator;
+
+			double duration;
+
+			if (n_.hasParam("trajectory_generator/duration"))
+			{
+				n_.getParam("trajectory_generator/duration", duration);
+			}
+
+			else
+			{
+				ROS_ERROR("Parameter trajectory_generator/duration not set, shutting down node...");
+				n_.shutdown();
+				return;
+			}
 
 			double radius;
 
@@ -228,21 +253,6 @@ public:
 			else
 			{
 				ROS_ERROR("Parameter trajectory_generator/period not set, shutting down node...");
-				n_.shutdown();
-				return;
-			}
-
-
-			double duration;
-
-			if (n_.hasParam("trajectory_generator/duration"))
-			{
-				n_.getParam("trajectory_generator/duration", duration);
-			}
-
-			else
-			{
-				ROS_ERROR("Parameter trajectory_generator/duration not set, shutting down node...");
 				n_.shutdown();
 				return;
 			}
@@ -409,6 +419,25 @@ public:
 		return true;
 	}
 
+	void reconfigCallback(dumbo_contact_point_estimation::SurfaceTracingControllerConfig &config, uint32_t level)
+	{
+		n_.setParam("controller/alpha_p", config.alpha_p);
+		n_.setParam("controller/alpha_i", config.alpha_i);
+		n_.setParam("controller/alpha", config.alpha);
+		n_.setParam("controller/f_d", config.f_d);
+		n_.setParam("controller/control_freq", config.control_freq);
+
+		n_.setParam("trajectory_generator/trajectory_type", config.trajectory_type);
+		n_.setParam("trajectory_generator/duration", config.duration);
+		n_.setParam("trajectory_generator/radius", config.radius);
+		n_.setParam("trajectory_generator/period", config.period);
+
+
+		configureController();
+		configureTrajectoryGenerator();
+
+	}
+
 private:
 
 	CartTrajGenerator *m_cart_traj_generator;
@@ -422,6 +451,9 @@ private:
 
 	// twist of the FT sensor expressed in the base frame
 	KDL::Twist m_twist_ft_sensor;
+
+	// specifies type of trajectory (circle, ...)
+	std::string m_trajectory_type;
 
 
 	// starting time for the trajectory generator
