@@ -43,8 +43,6 @@
 #include <geometry_msgs/Vector3Stamped.h>
 #include <geometry_msgs/WrenchStamped.h>
 #include <std_srvs/Empty.h>
-#include <dynamic_reconfigure/server.h>
-#include <dumbo_contact_point_estimation/SurfaceTracingControllerConfig.h>
 #include <boost/bind.hpp>
 
 class DumboSurfaceTracingControllerNode : DumboCartVelController
@@ -59,10 +57,6 @@ public:
 	/// declaration of service servers
 	ros::ServiceServer srvServer_Start_;
 	ros::ServiceServer srvServer_Stop_;
-
-	//	 dynamic reconfigure server
-	dynamic_reconfigure::Server<dumbo_contact_point_estimation::SurfaceTracingControllerConfig> *dyn_reconfig_server_;
-	dynamic_reconfigure::Server<dumbo_contact_point_estimation::SurfaceTracingControllerConfig>::CallbackType f_;
 
 	DumboSurfaceTracingControllerNode() : DumboCartVelController()
 	{
@@ -79,13 +73,6 @@ public:
 
 		srvServer_Start_ = n_.advertiseService("start", &DumboSurfaceTracingControllerNode::srvCallback_Start, this);
 		srvServer_Stop_ = n_.advertiseService("stop", &DumboSurfaceTracingControllerNode::srvCallback_Stop, this);
-
-		// set up the dyn reconfig callback
-		dyn_reconfig_server_ = new dynamic_reconfigure::Server<dumbo_contact_point_estimation::SurfaceTracingControllerConfig>();
-
-		f_ = boost::bind(&DumboSurfaceTracingControllerNode::reconfigCallback, this, _1, _2);
-		dyn_reconfig_server_->setCallback(f_);
-
 
 		m_surface_tracing_controller = new SurfaceTracingController();
 		m_cart_traj_generator = NULL;
@@ -106,7 +93,6 @@ public:
 	{
 		delete m_surface_tracing_controller;
 		delete m_cart_traj_generator;
-		delete dyn_reconfig_server_;
 	}
 
 	void configureSurfaceTracingController()
@@ -425,25 +411,6 @@ public:
 	{
 		m_run_controller = false;
 		return true;
-	}
-
-	void reconfigCallback(dumbo_contact_point_estimation::SurfaceTracingControllerConfig &config, uint32_t level)
-	{
-		n_.setParam("controller/alpha_p", config.alpha_p);
-		n_.setParam("controller/alpha_i", config.alpha_i);
-		n_.setParam("controller/alpha", config.alpha);
-		n_.setParam("controller/f_d", config.f_d);
-		n_.setParam("controller/control_freq", config.control_freq);
-
-		n_.setParam("trajectory_generator/trajectory_type", config.trajectory_type);
-		n_.setParam("trajectory_generator/duration", config.duration);
-		n_.setParam("trajectory_generator/radius", config.radius);
-		n_.setParam("trajectory_generator/period", config.period);
-
-
-		configureSurfaceTracingController();
-		configureTrajectoryGenerator();
-
 	}
 
 private:
