@@ -67,7 +67,7 @@ public:
 		topicPub_twist_ft_sensor_ = n_.advertise<geometry_msgs::TwistStamped>("twist_ft_sensor", 1);
 		topicSub_ft_compensated_ = n_.subscribe("ft_compensated", 1,
 				&DumboSurfaceTracingControllerNode::topicCallback_ft_compensated, this);
-		topicSub_surface_normal_ = n_.subscribe("surface_normal", 1,
+		topicSub_surface_normal_ = n_.subscribe("surface_normal_estimate", 1,
 						&DumboSurfaceTracingControllerNode::topicCallback_surface_normal, this);
 
 
