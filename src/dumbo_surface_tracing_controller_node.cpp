@@ -384,7 +384,7 @@ public:
 			m_t_start = ros::Time::now();
 			m_surface_tracing_controller->reset();
 			// set initial pose of FT sensor for trajectory generator
-			KDL::JntArray q_in;
+			static KDL::JntArray q_in(7);
 			for(unsigned int i=0; i<m_DOF; i++) q_in(i) = m_joint_state_msg.actual.positions[i];
 			KDL::Frame F_ft_sensor;
 			m_dumbo_ft_kdl_wrapper.fk_solver_pos->JntToCart(q_in, F_ft_sensor);
