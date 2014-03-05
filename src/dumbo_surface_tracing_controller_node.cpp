@@ -262,10 +262,23 @@ public:
 	{
 		m_ft_compensated = *msg;
 
+		std::string ft_sensor_frame_id;
+		if(m_ft_compensated.header.frame_id.substr(0,1)=="/")
+		{
+			ft_sensor_frame_id = m_ft_compensated.header.frame_id.erase(0, 1);
+		}
+
+		else
+		{
+			ft_sensor_frame_id = m_ft_compensated.header.frame_id;
+		}
+
 		if(!m_dumbo_ft_kdl_wrapper.isInitialized())
 		{
-			m_dumbo_ft_kdl_wrapper.init("arm_base_link", m_ft_compensated.header.frame_id);
-			m_dumbo_ft_kdl_wrapper.ik_solver_vel->setLambda(0.3);
+			if(m_dumbo_ft_kdl_wrapper.init("arm_base_link", ft_sensor_frame_id))
+			{
+				m_dumbo_ft_kdl_wrapper.ik_solver_vel->setLambda(0.3);
+			}
 		}
 	}
 
@@ -378,6 +391,12 @@ public:
 
 	bool srvCallback_Start(std_srvs::Empty::Request &req, std_srvs::Empty::Response &res)
 	{
+		if(!m_dumbo_ft_kdl_wrapper.isInitialized())
+		{
+			ROS_ERROR("Cannot start CPE, KDL wrapper not initialized");
+			return false;
+		}
+
 		if(m_received_js)
 		{
 			m_run_controller = true;
