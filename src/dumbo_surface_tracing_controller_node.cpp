@@ -399,6 +399,8 @@ public:
 
 		if(m_received_js)
 		{
+			ROS_INFO("Starting surface tracing controller");
+
 			m_run_controller = true;
 			m_t_start = ros::Time::now();
 			m_surface_tracing_controller->reset();
@@ -409,6 +411,9 @@ public:
 			m_dumbo_ft_kdl_wrapper.fk_solver_pos->JntToCart(q_in, F_ft_sensor);
 
 			m_cart_traj_generator->setInitPose(F_ft_sensor);
+
+			configureSurfaceTracingController();
+			configureTrajectoryGenerator();
 
 		}
 
@@ -428,6 +433,7 @@ public:
 
 	bool srvCallback_Stop(std_srvs::Empty::Request &req, std_srvs::Empty::Response &res)
 	{
+		ROS_INFO("Stopping surface tracing controller");
 		m_run_controller = false;
 		return true;
 	}
