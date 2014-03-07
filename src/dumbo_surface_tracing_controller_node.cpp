@@ -260,7 +260,9 @@ public:
 
 	void topicCallback_ft_compensated(const geometry_msgs::WrenchStampedPtr &msg)
 	{
+		m_ft_mutex.lock();
 		m_ft_compensated = *msg;
+		m_ft_mutex.unlock();
 
 		std::string ft_sensor_frame_id;
 		if(m_ft_compensated.header.frame_id.substr(0,1)=="/")
@@ -356,8 +358,10 @@ public:
 		m_dumbo_ft_kdl_wrapper.fk_solver_vel->JntToCart(q_in, Fvel_ft);
 
 		Eigen::Vector3d p(Fvel_ft.p.p(0), Fvel_ft.p.p(1), Fvel_ft.p.p(2));
+		m_twist_mutex.lock();
 		m_twist_ft_sensor.vel = Fvel_ft.p.v;
 		m_twist_ft_sensor.rot = Fvel_ft.M.w;
+		m_twist_mutex.unlock();
 
 		// get p_d, p_dot_d set points from the trajectory generator
 		double time = (ros::Time::now()-m_t_start).toSec();
@@ -373,10 +377,14 @@ public:
 
 		// calculate control signal (twist of FT sensor with respect to arm_base_frame)
 		Eigen::Matrix<double, 6, 1> ft_compensated;
+		m_ft_mutex.lock();
 		tf::wrenchMsgToEigen(m_ft_compensated.wrench, ft_compensated);
+		m_ft_mutex.unlock();
 
 		Eigen::Vector3d surface_normal;
+		m_surface_normal_mutex.lock();
 		tf::vectorMsgToEigen(m_surface_normal.vector, surface_normal);
+		m_surface_normal_mutex.unlock();
 
 		Eigen::Vector3d u;
 		u = m_surface_tracing_controller->controlSignal(surface_normal,
@@ -397,7 +405,9 @@ public:
 		geometry_msgs::TwistStamped twist_ft_sensor;
 		twist_ft_sensor.header.frame_id = "arm_base_link";
 		twist_ft_sensor.header.stamp = ros::Time::now();
+		m_twist_mutex.lock();
 		tf::twistKDLToMsg(m_twist_ft_sensor, twist_ft_sensor.twist);
+		m_twist_mutex.unlock();
 
 		topicPub_twist_ft_sensor_.publish(twist_ft_sensor);
 	}
@@ -473,6 +483,7 @@ private:
 	// mutexes for protecting shared mem variables
 	boost::mutex m_ft_mutex;
 	boost::mutex m_surface_normal_mutex;
+	boost::mutex m_twist_mutex;
 
 	// thread that publishes joint velocity commands
 	boost::thread m_joint_vel_command_publish_thread;
