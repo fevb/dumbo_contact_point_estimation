@@ -284,28 +284,39 @@ public:
 
 	void topicCallback_surface_normal(const geometry_msgs::Vector3StampedPtr &msg)
 	{
+		m_surface_normal_mutex.lock();
 		m_surface_normal = *msg;
+		m_surface_normal_mutex.unlock();
 	}
 
-	void topicCallback_joint_states(const control_msgs::JointTrajectoryControllerStatePtr &msg)
+	void publishJointVelThreadFunc()
 	{
-		DumboCartVelController::topicCallback_joint_states(msg);
-
-		if(m_run_controller)
+		static ros::Rate loop_rate(m_surface_tracing_controller->getControlFrequency());
+		for(;;)
 		{
-			KDL::JntArray q_dot;
-			if(calculateJointVelCommand(q_dot))
+			if(m_run_controller)
 			{
+				KDL::JntArray q_dot;
+				if(calculateJointVelCommand(q_dot))
+				{
 
-				// publish joint velocity command to the manipulator
-				publishJointVelCommand(q_dot);
-				// publish twist of the FT sensor frame
-				publishFTSensorTwist();
+					// publish joint velocity command to the manipulator
+					publishJointVelCommand(q_dot);
+					// publish twist of the FT sensor frame
+					publishFTSensorTwist();
+				}
+				loop_rate.sleep();
+			}
+
+			else
+			{
+				return;
 			}
 		}
 
 	}
 
+	// calculate twist of FT sensor, then use IK to calculate joint velocities
 	bool calculateJointVelCommand(KDL::JntArray &q_dot)
 	{
 		if(!m_dumbo_ft_kdl_wrapper.isInitialized())
@@ -331,11 +342,13 @@ public:
 		}
 
 		KDL::JntArrayVel q_in(m_DOF);
+		m_joint_state_mutex.lock();
 		for(unsigned int i=0; i<m_DOF; i++)
 		{
 			q_in.q(i) = m_joint_state_msg.actual.positions[i];
 			q_in.qdot(i) = m_joint_state_msg.actual.velocities[i];
 		}
+		m_joint_state_mutex.unlock();
 
 		// calculate pose and twist of FT sensor
 
@@ -397,7 +410,18 @@ public:
 			return false;
 		}
 
-		if(m_received_js)
+		if(!m_received_js)
+		{
+			static ros::Time t = ros::Time::now();
+			if((ros::Time::now()-t).toSec()>2.0)
+			{
+				ROS_ERROR("Haven't received joint states, can't start controller...");
+				t = ros::Time::now();
+			}
+			return false;
+		}
+
+		else
 		{
 			ROS_INFO("Starting surface tracing controller");
 
@@ -415,17 +439,8 @@ public:
 			configureSurfaceTracingController();
 			configureTrajectoryGenerator();
 
-		}
-
-		else
-		{
-			static ros::Time t = ros::Time::now();
-			if((ros::Time::now()-t).toSec()>2.0)
-			{
-				ROS_ERROR("Haven't received joint states, can't start controller...");
-				t = ros::Time::now();
-			}
-			return false;
+			m_joint_vel_command_publish_thread = boost::thread(boost::bind(&DumboSurfaceTracingControllerNode::publishJointVelThreadFunc,
+					this));
 		}
 
 		return true;
@@ -455,6 +470,13 @@ private:
 	// specifies type of trajectory (circle, ...)
 	std::string m_trajectory_type;
 
+	// mutexes for protecting shared mem variables
+	boost::mutex m_ft_mutex;
+	boost::mutex m_surface_normal_mutex;
+
+	// thread that publishes joint velocity commands
+	boost::thread m_joint_vel_command_publish_thread;
+
 
 	// starting time for the trajectory generator
 	ros::Time m_t_start;
@@ -470,7 +492,10 @@ int main(int argc, char **argv)
 
 	DumboSurfaceTracingControllerNode dumbo_surface_tracing_controller_node;
 
-	ros::spin();
+	ros::AsyncSpinner s(3);
+	s.start();
+
+	ros::waitForShutdown();
 
 	return 0;
 }
