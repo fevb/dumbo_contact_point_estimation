@@ -439,17 +439,17 @@ public:
 			m_t_start = ros::Time::now();
 			m_surface_tracing_controller->reset();
 			// set initial pose of FT sensor for trajectory generator
-			static KDL::JntArray q_in(7);
+			static KDL::JntArray q_in(m_DOF);
 			m_joint_state_mutex.lock();
 			for(unsigned int i=0; i<m_DOF; i++) q_in(i) = m_joint_state_msg.actual.positions[i];
 			m_joint_state_mutex.unlock();
 			KDL::Frame F_ft_sensor;
 			m_dumbo_ft_kdl_wrapper.fk_solver_pos->JntToCart(q_in, F_ft_sensor);
 
-			m_cart_traj_generator->setInitPose(F_ft_sensor);
-
 			configureSurfaceTracingController();
 			configureTrajectoryGenerator();
+
+			m_cart_traj_generator->setInitPose(F_ft_sensor);
 
 			m_joint_vel_command_publish_thread = boost::thread(boost::bind(&DumboSurfaceTracingControllerNode::publishJointVelThreadFunc,
 					this));
