@@ -37,6 +37,7 @@
 #include <contact_point_estimation/SurfaceTracingController.h>
 #include <dumbo_cart_vel_controller/DumboCartVelController.h>
 #include <cart_traj_generators/CircleTrajGenerator.h>
+#include <cart_traj_generators/LineTrajGenerator.h>
 #include <eigen_conversions/eigen_msg.h>
 #include <kdl_conversions/kdl_msg.h>
 #include <geometry_msgs/TwistStamped.h>
@@ -250,9 +251,114 @@ public:
 			circle_traj_generator->setDuration(duration);
 		}
 
+		else if(m_trajectory_type=="line")
+		{
+			LineTrajGenerator *line_traj_generator = new LineTrajGenerator();
+			m_cart_traj_generator = line_traj_generator;
+
+			double duration;
+
+			if (n_.hasParam("trajectory_generator/duration"))
+			{
+				n_.getParam("trajectory_generator/duration", duration);
+			}
+
+			else
+			{
+				ROS_ERROR("Parameter trajectory_generator/duration not set, shutting down node...");
+				n_.shutdown();
+				return;
+			}
+
+			// get the tangential direction in which to move in a straight line
+			KDL::Vector tangential_direction;
+			XmlRpc::XmlRpcValue tangentialDirectionXmlRpc;
+			if (n_.hasParam("trajectory_generator/tangential_direction"))
+			{
+				n_.getParam("trajectory_generator/tangential_direction", tangentialDirectionXmlRpc);
+			}
+
+			else
+			{
+				ROS_ERROR("Parameter trajectory_generator/tangential_direction not set, shutting down node...");
+				n_.shutdown();
+				return;
+			}
+
+			if(tangentialDirectionXmlRpc.size()<3)
+			{
+				ROS_ERROR("Parameter trajectory_generator/tangential_direction wrong size (must be 3)");
+			}
+
+			for(unsigned int i = 0; i < tangentialDirectionXmlRpc.size(); i++)
+			{
+				tangential_direction(i) = (double)tangentialDirectionXmlRpc[i];
+			}
+
+
+			KDL::Vector normal_direction;
+			XmlRpc::XmlRpcValue normalDirectionXmlRpc;
+			if (n_.hasParam("trajectory_generator/normal_direction"))
+			{
+				n_.getParam("trajectory_generator/normal_direction", normalDirectionXmlRpc);
+			}
+
+			else
+			{
+				ROS_ERROR("Parameter trajectory_generator/normal_direction not set, shutting down node...");
+				n_.shutdown();
+				return;
+			}
+
+			if(normalDirectionXmlRpc.size()<3)
+			{
+				ROS_ERROR("Parameter trajectory_generator/normal_direction wrong size (must be 3)");
+			}
+
+			for(unsigned int i = 0; i < normalDirectionXmlRpc.size(); i++)
+			{
+				normal_direction(i) = (double)normalDirectionXmlRpc[i];
+			}
+
+			// get velocity of line trajectory
+			double vel;
+			if (n_.hasParam("trajectory_generator/vel"))
+			{
+				n_.getParam("trajectory_generator/vel", vel);
+			}
+
+			else
+			{
+				ROS_ERROR("Parameter trajectory_generator/vel not set, shutting down node...");
+				n_.shutdown();
+				return;
+			}
+
+			// get amplitude of sine wave to apply in the normal direction
+			double sine_amplitude;
+			if (n_.hasParam("trajectory_generator/sine_amplitude"))
+			{
+				n_.getParam("trajectory_generator/sine_amplitude", sine_amplitude);
+			}
+
+			else
+			{
+				ROS_ERROR("Parameter trajectory_generator/sine_amplitude not set, shutting down node...");
+				n_.shutdown();
+				return;
+			}
+
+
+			line_traj_generator->setDuration(duration);
+			line_traj_generator->setTangentialDirection(tangential_direction);
+			line_traj_generator->setNormalDirection(normal_direction);
+			line_traj_generator->setVel(vel);
+			line_traj_generator->setSineAmplitude(sine_amplitude);
+		}
+
 		else
 		{
-			ROS_ERROR("Invalid trajectory_type parameter (options: circle), shutting down node...");
+			ROS_ERROR("Invalid trajectory_type parameter (options: circle, line), shutting down node...");
 			n_.shutdown();
 			return;
 		}

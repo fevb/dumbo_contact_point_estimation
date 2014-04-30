@@ -11,6 +11,8 @@ controller/f_d: 10.0
 # control frequency [Hz]
 controller/control_freq: 150.0
 
+####### circle trajectory #######
+
 # trajectory type 
 trajectory_generator/trajectory_type: circle
 
@@ -22,3 +24,24 @@ trajectory_generator/radius: 0.05
 
 # trajectory period [s]
 trajectory_generator/period: 8.0
+
+
+####### line trajectory #######
+
+# trajectory type
+#trajectory_generator/trajectory_type: line
+
+# trajectory duration [s]
+#trajectory_generator/duration: 5.0
+
+# tangential direction
+#trajectory_generator/tangential_direction: [0.0, 1.0, 0.0]
+
+# normal direction
+#trajectory_generator/normal_direction: [0.0, 0.0, 1.0]
+
+# reference velocity of the line trajectory [m/s] 
+#trajectory_generator/vel: 0.03
+
+# amplitude of the sine wave in the normal direction [m]
+#trajectory_generator/sine_amplitude: 0.0
