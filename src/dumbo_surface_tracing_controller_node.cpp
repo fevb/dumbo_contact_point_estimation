@@ -38,7 +38,9 @@
 #include <dumbo_cart_vel_controller/DumboCartVelController.h>
 #include <cart_traj_generators/CircleTrajGenerator.h>
 #include <cart_traj_generators/LineTrajGenerator.h>
+#include <cart_traj_generators/LinePeriodicTrajGenerator.h>
 #include <eigen_conversions/eigen_msg.h>
+#include <eigen_conversions/eigen_kdl.h>
 #include <kdl_conversions/kdl_msg.h>
 #include <geometry_msgs/TwistStamped.h>
 #include <geometry_msgs/Vector3Stamped.h>
@@ -52,7 +54,7 @@ class DumboSurfaceTracingControllerNode : DumboCartVelController
 public:
 
 	ros::Publisher topicPub_twist_ft_sensor_;
-	ros::Subscriber topicSub_ft_compensated_;
+	ros::Subscriber topicSub_ft_;
 	ros::Subscriber topicSub_surface_normal_;
 
 	/// declaration of service servers
@@ -66,8 +68,8 @@ public:
 		topicSub_CommandTwist_.shutdown();
 
 		topicPub_twist_ft_sensor_ = n_.advertise<geometry_msgs::TwistStamped>("twist_ft_sensor", 1);
-		topicSub_ft_compensated_ = n_.subscribe("ft_compensated", 1,
-				&DumboSurfaceTracingControllerNode::topicCallback_ft_compensated, this);
+		topicSub_ft_ = n_.subscribe("ft", 1,
+				&DumboSurfaceTracingControllerNode::topicCallback_ft, this);
 		topicSub_surface_normal_ = n_.subscribe("surface_normal_estimate", 1,
 						&DumboSurfaceTracingControllerNode::topicCallback_surface_normal, this);
 
@@ -356,29 +358,149 @@ public:
 			line_traj_generator->setSineAmplitude(sine_amplitude);
 		}
 
+		else if(m_trajectory_type=="line_periodic")
+		{
+			LinePeriodicTrajGenerator *line_periodic_traj_generator = new LinePeriodicTrajGenerator();
+			m_cart_traj_generator = line_periodic_traj_generator;
+
+			double duration;
+
+			if (n_.hasParam("trajectory_generator/duration"))
+			{
+				n_.getParam("trajectory_generator/duration", duration);
+			}
+
+			else
+			{
+				ROS_ERROR("Parameter trajectory_generator/duration not set, shutting down node...");
+				n_.shutdown();
+				return;
+			}
+
+			// get the tangential direction in which to move in a straight line
+			KDL::Vector tangential_direction;
+			XmlRpc::XmlRpcValue tangentialDirectionXmlRpc;
+			if (n_.hasParam("trajectory_generator/tangential_direction"))
+			{
+				n_.getParam("trajectory_generator/tangential_direction", tangentialDirectionXmlRpc);
+			}
+
+			else
+			{
+				ROS_ERROR("Parameter trajectory_generator/tangential_direction not set, shutting down node...");
+				n_.shutdown();
+				return;
+			}
+
+			if(tangentialDirectionXmlRpc.size()<3)
+			{
+				ROS_ERROR("Parameter trajectory_generator/tangential_direction wrong size (must be 3)");
+			}
+
+			for(unsigned int i = 0; i < tangentialDirectionXmlRpc.size(); i++)
+			{
+				tangential_direction(i) = (double)tangentialDirectionXmlRpc[i];
+			}
+
+
+			KDL::Vector normal_direction;
+			XmlRpc::XmlRpcValue normalDirectionXmlRpc;
+			if (n_.hasParam("trajectory_generator/normal_direction"))
+			{
+				n_.getParam("trajectory_generator/normal_direction", normalDirectionXmlRpc);
+			}
+
+			else
+			{
+				ROS_ERROR("Parameter trajectory_generator/normal_direction not set, shutting down node...");
+				n_.shutdown();
+				return;
+			}
+
+			if(normalDirectionXmlRpc.size()<3)
+			{
+				ROS_ERROR("Parameter trajectory_generator/normal_direction wrong size (must be 3)");
+			}
+
+			for(unsigned int i = 0; i < normalDirectionXmlRpc.size(); i++)
+			{
+				normal_direction(i) = (double)normalDirectionXmlRpc[i];
+			}
+
+			// get velocity of line trajectory
+			double vel;
+			if (n_.hasParam("trajectory_generator/vel"))
+			{
+				n_.getParam("trajectory_generator/vel", vel);
+			}
+
+			else
+			{
+				ROS_ERROR("Parameter trajectory_generator/vel not set, shutting down node...");
+				n_.shutdown();
+				return;
+			}
+
+			// get amplitude of sine wave to apply in the normal direction
+			double sine_amplitude;
+			if (n_.hasParam("trajectory_generator/sine_amplitude"))
+			{
+				n_.getParam("trajectory_generator/sine_amplitude", sine_amplitude);
+			}
+
+			else
+			{
+				ROS_ERROR("Parameter trajectory_generator/sine_amplitude not set, shutting down node...");
+				n_.shutdown();
+				return;
+			}
+
+			// get period of the line trajectory
+			double period;
+			if (n_.hasParam("trajectory_generator/period"))
+			{
+				n_.getParam("trajectory_generator/period", period);
+			}
+
+			else
+			{
+				ROS_ERROR("Parameter trajectory_generator/period not set, shutting down node...");
+				n_.shutdown();
+				return;
+			}
+
+
+			line_periodic_traj_generator->setDuration(duration);
+			line_periodic_traj_generator->setTangentialDirection(tangential_direction);
+			line_periodic_traj_generator->setNormalDirection(normal_direction);
+			line_periodic_traj_generator->setVel(vel);
+			line_periodic_traj_generator->setSineAmplitude(sine_amplitude);
+			line_periodic_traj_generator->setPeriod(period);
+		}
+
 		else
 		{
-			ROS_ERROR("Invalid trajectory_type parameter (options: circle, line), shutting down node...");
+			ROS_ERROR("Invalid trajectory_type parameter (options: circle, line, line_periodic), shutting down node...");
 			n_.shutdown();
 			return;
 		}
 	}
 
-	void topicCallback_ft_compensated(const geometry_msgs::WrenchStampedPtr &msg)
+	void topicCallback_ft(const geometry_msgs::WrenchStampedPtr &msg)
 	{
 		m_ft_mutex.lock();
-		m_ft_compensated = *msg;
+		m_ft = *msg;
 		m_ft_mutex.unlock();
 
 		std::string ft_sensor_frame_id;
-		if(m_ft_compensated.header.frame_id.substr(0,1)=="/")
+		if(m_ft.header.frame_id.substr(0,1)=="/")
 		{
-			ft_sensor_frame_id = m_ft_compensated.header.frame_id.erase(0, 1);
+			ft_sensor_frame_id = m_ft.header.frame_id.erase(0, 1);
 		}
 
 		else
 		{
-			ft_sensor_frame_id = m_ft_compensated.header.frame_id;
+			ft_sensor_frame_id = m_ft.header.frame_id;
 		}
 
 		if(!m_dumbo_ft_kdl_wrapper.isInitialized())
@@ -427,6 +549,7 @@ public:
 	// calculate twist of FT sensor, then use IK to calculate joint velocities
 	bool calculateJointVelCommand(KDL::JntArray &q_dot)
 	{
+		// check that KDL wrappers are initialized
 		if(!m_dumbo_ft_kdl_wrapper.isInitialized())
 		{
 			static ros::Time t = ros::Time::now();
@@ -438,17 +561,7 @@ public:
 			return false;
 		}
 
-		if(!m_dumbo_kdl_wrapper.isInitialized())
-		{
-			static ros::Time t = ros::Time::now();
-			if((ros::Time::now()-t).toSec()>2.0)
-			{
-				ROS_ERROR("Dumbo KDL wrapper not initialized");
-				t = ros::Time::now();
-			}
-			return false;
-		}
-
+		// collect joint pos and vel
 		KDL::JntArrayVel q_in(m_DOF);
 		m_joint_state_mutex.lock();
 		for(unsigned int i=0; i<m_DOF; i++)
@@ -481,20 +594,31 @@ public:
 		for(unsigned int i=0; i<3; i++) p_d(i) = F.p(i);
 		for(unsigned int i=0; i<3; i++) p_dot_d(i) = v.vel(i);
 
+
 		// calculate control signal (twist of FT sensor with respect to arm_base_frame)
-		Eigen::Matrix<double, 6, 1> ft_compensated;
+
+		// convert F/T measurements to the base frame
+		KDL::Wrench ft;
 		m_ft_mutex.lock();
-		tf::wrenchMsgToEigen(m_ft_compensated.wrench, ft_compensated);
+		tf::wrenchMsgToKDL(m_ft.wrench, ft);
 		m_ft_mutex.unlock();
+
+		KDL::Wrench ft_base = Fvel_ft.M.R*ft;
+
+
+		Eigen::Matrix<double, 6, 1> ft_base_;
+		tf::wrenchKDLToEigen(ft_base, ft_base_);
+
 
 		Eigen::Vector3d surface_normal;
 		m_surface_normal_mutex.lock();
 		tf::vectorMsgToEigen(m_surface_normal.vector, surface_normal);
 		m_surface_normal_mutex.unlock();
 
+
 		Eigen::Vector3d u;
 		u = m_surface_tracing_controller->controlSignal(surface_normal,
-				ft_compensated, p, p_d, p_dot_d);
+				ft_base_, p, p_d, p_dot_d);
 
 		// calculate inverse kinematics
 		// set rotational vel to zero
@@ -579,7 +703,7 @@ private:
 	// for calculating kinematics from base frame to the FT sensor frame
 	KDLWrapper m_dumbo_ft_kdl_wrapper;
 
-	geometry_msgs::WrenchStamped m_ft_compensated;
+	geometry_msgs::WrenchStamped m_ft;
 	geometry_msgs::Vector3Stamped m_surface_normal;
 
 	// twist of the FT sensor expressed in the base frame

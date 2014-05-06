@@ -1,12 +1,12 @@
 # normal force regulation PI gains
-controller/alpha_p: 0.0 #0.0022
-controller/alpha_i: 0.0 #0.00022
+controller/alpha_p: 0.01
+controller/alpha_i: 0.0006
 
 # trajectory position control gain
-controller/alpha: 0.0
+controller/alpha: 0.8
 
 # desired normal force [N]
-controller/f_d: 10.0
+controller/f_d: 12.0
 
 # control frequency [Hz]
 controller/control_freq: 150.0
@@ -17,13 +17,13 @@ controller/control_freq: 150.0
 trajectory_generator/trajectory_type: circle
 
 # trajectory duration [s]
-trajectory_generator/duration: 8.0
+trajectory_generator/duration: 3.0
 
 # trajectory radius [m]
-trajectory_generator/radius: 0.05
+trajectory_generator/radius: 0.04
 
 # trajectory period [s]
-trajectory_generator/period: 8.0
+trajectory_generator/period: 3.0
 
 
 ####### line trajectory #######
@@ -32,16 +32,40 @@ trajectory_generator/period: 8.0
 #trajectory_generator/trajectory_type: line
 
 # trajectory duration [s]
-#trajectory_generator/duration: 5.0
+#trajectory_generator/duration: 6.0
 
 # tangential direction
-#trajectory_generator/tangential_direction: [0.0, 1.0, 0.0]
+#trajectory_generator/tangential_direction: [-0.9999, -0.0005, 0.0084]
 
 # normal direction
-#trajectory_generator/normal_direction: [0.0, 0.0, 1.0]
+#trajectory_generator/normal_direction: [0.0084, -0.0577, 0.9983]
 
 # reference velocity of the line trajectory [m/s] 
-#trajectory_generator/vel: 0.03
+#trajectory_generator/vel: 0.1
 
 # amplitude of the sine wave in the normal direction [m]
-#trajectory_generator/sine_amplitude: 0.0
+#trajectory_generator/sine_amplitude: 0.003
+
+
+####### line periodic trajectory #######
+
+# trajectory type
+#trajectory_generator/trajectory_type: line_periodic
+
+# trajectory duration [s]
+#trajectory_generator/duration: 24.0
+
+# tangential direction
+#trajectory_generator/tangential_direction: [-0.9999, -0.0005, 0.0084]
+
+# normal direction
+#trajectory_generator/normal_direction: [0.0084, -0.0577, 0.9983]
+
+# reference velocity of the line trajectory [m/s] 
+#trajectory_generator/vel: 0.1
+
+# amplitude of the sine wave in the normal direction [m]
+#trajectory_generator/sine_amplitude: 0.000
+
+# period 
+#trajectory_generator/period: 6.0
